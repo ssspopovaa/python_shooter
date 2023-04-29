@@ -22,6 +22,9 @@ class Player(pygame.sprite.Sprite):
         self.hit_box_rect = self.base_player_image.get_rect(center = self.pos)
         self.rect = self.hit_box_rect.copy()
         self.speed = PLAYER_SPEED
+        self.shoot = False
+        self.shoot_cooldown = 0
+        self.gun_barrel_offset = pygame.math.Vector2(GUN_OFFSET_X, GUN_OFFSET_Y)
     
     def player_rotation(self):
         self.mouse_coords = pygame.mouse.get_pos()
@@ -45,9 +48,24 @@ class Player(pygame.sprite.Sprite):
             self.velocity_x = self.speed
         if keys[pygame.K_a]:
             self.velocity_x = -self.speed
+        
         if player.velocity_x != 0 and player.velocity_y != 0: # moving diagonally
             self.velocity_x /= math.sqrt(2)
             self.velocity_y /= math.sqrt(2)
+        
+        self.shoot = False
+        if pygame.mouse.get_pressed() == (1,0,0) or keys[pygame.K_SPACE]:
+            self.shoot = True
+            self.is_shooting()
+    
+    def is_shooting(self):
+        if self.shoot_cooldown == 0:
+            self.shoot_cooldown = SHOOT_COOLDOWN
+            spaw_bullet_pos = self.pos + self.gun_barrel_offset.rotate(self.angle)
+            self.bullet = Bullet(spaw_bullet_pos[0], spaw_bullet_pos[1], self.angle)
+        
+            bullet_group.add(self.bullet)
+            all_sprites_group.add(self.bullet)
     
     def move(self):
         self.pos += pygame.math.Vector2(self.velocity_x, self.velocity_y)
@@ -58,10 +76,44 @@ class Player(pygame.sprite.Sprite):
         self.user_input()
         self.move()
         self.player_rotation()
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
+
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, x, y, angle):
+        super().__init__()
+        self.image = pygame.image.load("bullet/1.png").convert_alpha()
+        self.image = pygame.transform.rotozoom(self.image, 0, BULLET_SCALE)
+        self.rect = self.image.get_rect()
+        self.rect.center = (x, y)
+        self.x = x
+        self.y = y
+        self.angle = angle
+        self.speed = BULLET_SPEED
+        self.x_vel = math.cos(self.angle * (2*math.pi/360)) * self.speed
+        self.y_vel = math.sin(self.angle * (2*math.pi/360)) * self.speed
+        self.bullet_lifetime = BULLET_LIFETIME
+        self.spawn_time = pygame.time.get_ticks() #gets the specific time that the bullet was created
+    
+    def bullet_movement(self):
+        self.x += self.x_vel
+        self.y += self.y_vel
         
+        self.rect.x = int(self.x)
+        self.rect.y = int(self.y)
+        
+        if pygame.time.get_ticks() - self.spawn_time > self.bullet_lifetime:
+            self.kill()
+    
+    def update(self):
+        self.bullet_movement()
+
 player = Player()
 
-print(player)
+all_sprites_group = pygame.sprite.Group()
+bullet_group = pygame.sprite.Group()
+
+all_sprites_group.add(player)
 
 while True:
     keys = pygame.key.get_pressed()
@@ -72,11 +124,14 @@ while True:
             exit()
             
     screen.blit(background, (0, 0))
-    screen.blit(player.image, player.rect)
-    player.update()
     
-    pygame.draw.rect(screen, "red", player.hit_box_rect, width = 2)
-    pygame.draw.rect(screen, "yellow", player.rect, width = 2)
+    # screen.blit(player.image, player.rect)
+    # player.update()
+    all_sprites_group.draw(screen)
+    all_sprites_group.update()
+    
+    # pygame.draw.rect(screen, "red", player.hit_box_rect, width = 2)
+    # pygame.draw.rect(screen, "yellow", player.rect, width = 2)
     
     pygame.display.update()
     clock.tick(FPS)
